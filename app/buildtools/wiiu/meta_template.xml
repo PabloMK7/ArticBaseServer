@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<app version="1">
+  <name>$(TITLE)</name>
+  <coder>$(AUTHOR)</coder>
+  <version>$(VERSION)</version>
+  <release_date>$(RELEASE_DATE)</release_date>
+  <short_description>$(SHORT_DESCRIPTION)</short_description> 
+  <long_description>$(LONG_DESCRIPTION)</long_description> 
+</app>

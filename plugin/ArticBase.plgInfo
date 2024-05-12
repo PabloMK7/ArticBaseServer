@@ -1,0 +1,21 @@
+Author: Nanquitas
+
+Version: # Plugin version
+    Major: VERSION_MAJOR
+    Minor: VERSION_MINOR
+    Revision: VERSION_REVISION
+
+Targets: # Low TitleId of games which are compatibles with this plugin (empty for all)
+
+Title: Artic Base Server
+
+Summary: 3DS Game Broadcaster
+
+Description: |
+  Broadcast your games to a compatible emulator
+
+Compatibility: Console
+MemorySize: 2MiB
+
+EventsSelfManaged: true
+SwapNotNeeded: true

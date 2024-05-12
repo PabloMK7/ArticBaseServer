@@ -1,0 +1,8 @@
+/build
+*.3gx
+.vscode/
+output/
+*.map
+
+includes/plugin.h
+sources/plugin.c
