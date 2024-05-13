@@ -23,7 +23,7 @@ char *strdup(const char *s) {
 	return d;
 }
 
-FILE* fopen_mkdir(const char* name, const char* mode)
+FILE* fopen_mkdir(const char* name, const char* mode, bool actuallyOpen = true)
 {
 	char*	_path = strdup(name);
 	char    *p;
@@ -40,7 +40,7 @@ FILE* fopen_mkdir(const char* name, const char* mode)
 			*p = '/';
 		}
 	}
-	retfile = fopen(name, mode);
+	if (actuallyOpen) retfile = fopen(name, mode);
 error:
 	free(_path);
 	return retfile;
@@ -78,6 +78,10 @@ bool extractPlugin() {
 
 bool launchPlugin() {
     
+    // Make sure the luma plugins directory exists
+    // so that persistent user parameters work
+    fopen_mkdir("/luma/plugins/a.txt", "w", false);
+
 	u32 ret = 0;
 	PluginLoadParameters plgparam = { 0 };
 	u8 isPlgEnabled = 0;
