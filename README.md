@@ -3,7 +3,7 @@
 <img width="180" height="180" src="https://github.com/PabloMK7/ArticBaseServer/blob/main/images/logo.png?raw=true">
 </p>
 
-## NOTE: Artic Base Server was released very recently and may have unexpected bugs. Please back up the save file of the game you want to broadcast just in case!
+**NOTE: Artic Base Server was released very recently and may have unexpected bugs. Please back up the save file of the game you want to broadcast just in case!**
 
 Artic Base is a tool for broadcasting games from your 3DS to a compatible emulator. This allows playing your physical or digital games on an emulator without having to dump them. You can find a demo [here](https://www.youtube.com/watch?v=noDz-FnOd2M).
 
