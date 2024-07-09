@@ -45,7 +45,7 @@ private:
         std::vector<ArticBaseCommon::RequestParameter> reqParameters;
     };
 
-    static constexpr const char* VERSION = "0";
+    static constexpr const char* VERSION = "1";
 
     int socketFd;
     bool run = true;

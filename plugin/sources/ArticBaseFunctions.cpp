@@ -1,11 +1,15 @@
 #include "ArticBaseFunctions.hpp"
 #include "Main.hpp"
+#include "amExtension.hpp"
 #include "fsExtension.hpp"
+#include "CTRPluginFramework/CTRPluginFramework.hpp"
 
 namespace ArticBaseFunctions {
 
     ExHeader_Info lastAppExheader;
     std::map<u64, HandleType> openHandles;
+    CTRPluginFramework::Mutex amMutex;
+    CTRPluginFramework::Mutex cfgMutex;
 
     void Process_GetTitleID(ArticBaseServer::MethodInterface& mi) {
         bool good = true;
@@ -884,6 +888,34 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
+    void FSUSER_CreateSysSaveData_(ArticBaseServer::MethodInterface& mi) {
+        bool good = true;
+        s8 duplicate_data;
+        s32 high, low, total_size, block_size, number_directories, number_files, number_directory_buckets, number_file_buckets;
+
+        if (good) good = mi.GetParameterS32(high);
+        if (good) good = mi.GetParameterS32(low);
+        if (good) good = mi.GetParameterS32(total_size);
+        if (good) good = mi.GetParameterS32(block_size);
+        if (good) good = mi.GetParameterS32(number_directories);
+        if (good) good = mi.GetParameterS32(number_files);
+        if (good) good = mi.GetParameterS32(number_directory_buckets);
+        if (good) good = mi.GetParameterS32(number_file_buckets);
+        if (good) good = mi.GetParameterS8(duplicate_data);
+
+        if (good) good = mi.FinishInputParameters();
+
+        if (!good) return;
+
+        // Citra has this structure wrong, high is actually the first 4 bytes of FS_SystemSaveDataInfo and low is saveId
+        FS_SystemSaveDataInfo sinfo;
+        memcpy(&sinfo, &high, sizeof(high));
+        sinfo.saveId = low;
+
+        Result res = FSUSER_CreateSystemSaveData(sinfo, (u32)total_size, (u32)block_size, (u32)number_directories, (u32)number_files, (u32)number_directory_buckets, (u32)number_file_buckets, duplicate_data != 0);
+        mi.FinishGood(res);
+    }
+
     void FSFILE_Close_(ArticBaseServer::MethodInterface& mi) {
         bool good = true;
         s32 handle;
@@ -1011,6 +1043,7 @@ namespace ArticBaseFunctions {
         if (R_FAILED(res)) {
             mi.ResizeLastResultBuffer(read_buf, 0);
             mi.FinishGood(res);
+            return;
         }
 
         mi.ResizeLastResultBuffer(read_buf, bytes_read);
@@ -1091,6 +1124,7 @@ namespace ArticBaseFunctions {
         if (R_FAILED(res)) {
             mi.ResizeLastResultBuffer(read_dir_buf, 0);
             mi.FinishGood(res);
+            return;
         }
 
         mi.ResizeLastResultBuffer(read_dir_buf, entries_read * sizeof(FS_DirectoryEntry));
@@ -1109,6 +1143,406 @@ namespace ArticBaseFunctions {
 
         Result res = FSDIR_Close(handle);
         openHandles.erase((u64)handle);
+
+        mi.FinishGood(res);
+    }
+
+    void AM_GetTitleCount_(ArticBaseServer::MethodInterface& mi) {
+        bool good = true;
+        s8 mediatype;
+
+        if (good) good = mi.GetParameterS8(mediatype);
+
+        if (good) good = mi.FinishInputParameters();
+
+        if (!good) return;
+
+        CTRPluginFramework::Lock l(amMutex);
+        Result res = amInit();
+        if (R_FAILED(res)) {
+            mi.FinishGood(res);
+            return;
+        }
+
+        u32 count = 0;
+        res = AM_GetTitleCount(static_cast<FS_MediaType>(mediatype), &count);
+        amExit();
+        if (R_FAILED(res)) {
+            mi.FinishGood(res);
+            return;
+        }
+
+        ArticBaseCommon::Buffer* count_buf = mi.ReserveResultBuffer(0, sizeof(u32));
+        if (!count_buf) {
+            return;
+        }
+
+        *reinterpret_cast<u32*>(count_buf->data) = count;
+        mi.FinishGood(res);
+    }
+
+    void AM_GetTitleList_(ArticBaseServer::MethodInterface& mi) {
+        bool good = true;
+        s32 count;
+        s8 mediatype;
+
+        if (good) good = mi.GetParameterS32(count);
+        if (good) good = mi.GetParameterS8(mediatype);
+
+        if (good) good = mi.FinishInputParameters();
+
+        if (!good) return;
+
+        ArticBaseCommon::Buffer* title_buf = mi.ReserveResultBuffer(0, count * sizeof(u64));
+        if (!title_buf) {
+            return;
+        }
+
+        CTRPluginFramework::Lock l(amMutex);
+        Result res = amInit();
+        if (R_FAILED(res)) {
+            mi.ResizeLastResultBuffer(title_buf, 0);
+            mi.FinishGood(res);
+            return;
+        }
+
+        u32 titlesRead = 0;
+        res = AM_GetTitleList(&titlesRead, static_cast<FS_MediaType>(mediatype), count, reinterpret_cast<u64*>(title_buf->data));
+        amExit();
+        if (R_FAILED(res)) {
+            mi.ResizeLastResultBuffer(title_buf, 0);
+            mi.FinishGood(res);
+            return;
+        }
+
+        mi.ResizeLastResultBuffer(title_buf, sizeof(u64) * titlesRead);
+        mi.FinishGood(res);
+    }
+
+    void AM_GetTitleInfo_(ArticBaseServer::MethodInterface& mi) {
+        bool good = true;
+        s8 mediatype;
+        s8 ignorePlatform;
+        void* titleList; size_t titleListSize;
+
+        if (good) good = mi.GetParameterS8(mediatype);
+        if (good) good = mi.GetParameterBuffer(titleList, titleListSize);
+        if (good) good = mi.GetParameterS8(ignorePlatform);
+
+        if (good) good = mi.FinishInputParameters();
+
+        if (!good) return;
+
+        CTRPluginFramework::Lock l(amMutex);
+        Result res = amInit();
+        if (R_FAILED(res)) {
+            mi.FinishGood(res);
+            return;
+        }
+
+        // Cannot use output buffer while using input at the same time, need to allocate
+        u64* titleIDs = (u64*)malloc(titleListSize);
+        memcpy(titleIDs, titleList, titleListSize);
+        u32 count = titleListSize / sizeof(u64);
+
+        ArticBaseCommon::Buffer* title_buf = mi.ReserveResultBuffer(0, count * sizeof(AM_TitleEntry));
+        if (!title_buf) {
+            free(titleIDs);
+            return;
+        }
+
+        if (ignorePlatform) {
+            res = AM_GetTitleInfoIgnorePlatform(static_cast<FS_MediaType>(mediatype), count, titleIDs, reinterpret_cast<AM_TitleEntry*>(title_buf->data));
+        } else {
+            res = AM_GetTitleInfo(static_cast<FS_MediaType>(mediatype), count, titleIDs, reinterpret_cast<AM_TitleEntry*>(title_buf->data));
+        }
+        free(titleIDs);
+        amExit();
+        if (R_FAILED(res)) {
+            mi.ResizeLastResultBuffer(title_buf, 0);
+            mi.FinishGood(res);
+            return;
+        }
+
+        mi.FinishGood(res);
+    }
+
+    void AMAPP_GetDLCContentInfoCount_(ArticBaseServer::MethodInterface& mi) {
+        bool good = true;
+        s8 mediatype;
+        s64 title_id;
+
+        if (good) good = mi.GetParameterS8(mediatype);
+        if (good) good = mi.GetParameterS64(title_id);
+
+        if (good) good = mi.FinishInputParameters();
+
+        if (!good) return;
+
+        CTRPluginFramework::Lock l(amMutex);
+        Result res = amAppInit();
+        if (R_FAILED(res)) {
+            mi.FinishGood(res);
+            return;
+        }
+
+        u32 count = 0;
+        res = AMAPP_GetDLCContentInfoCount(&count, static_cast<FS_MediaType>(mediatype), static_cast<u64>(title_id));
+        amExit();
+        if (R_FAILED(res)) {
+            mi.FinishGood(res);
+            return;
+        }
+
+        ArticBaseCommon::Buffer* count_buf = mi.ReserveResultBuffer(0, sizeof(u32));
+        if (!count_buf) {
+            return;
+        }
+
+        *reinterpret_cast<u32*>(count_buf->data) = count;
+        mi.FinishGood(res);
+    }
+
+    void AMAPP_FindDLCContentInfos_(ArticBaseServer::MethodInterface& mi) {
+        bool good = true;
+        s8 mediatype;
+        s64 title_id;
+        void* contentList; size_t contentListSize;
+
+        if (good) good = mi.GetParameterS8(mediatype);
+        if (good) good = mi.GetParameterS64(title_id);
+        if (good) good = mi.GetParameterBuffer(contentList, contentListSize);
+
+        if (good) good = mi.FinishInputParameters();
+
+        if (!good) return;
+
+        CTRPluginFramework::Lock l(amMutex);
+        Result res = amAppInit();
+        if (R_FAILED(res)) {
+            mi.FinishGood(res);
+            return;
+        }
+
+        // Cannot use output buffer while using input at the same time, need to allocate
+        u16* contentIDs = (u16*)malloc(contentListSize);
+        memcpy(contentIDs, contentList, contentListSize);
+        u32 count = contentListSize / sizeof(u16);
+
+        ArticBaseCommon::Buffer* title_buf = mi.ReserveResultBuffer(0, count * sizeof(AM_ContentInfo));
+        if (!title_buf) {
+            free(contentIDs);
+            return;
+        }
+
+        res = AMAPP_FindDLCContentInfos(static_cast<FS_MediaType>(mediatype), title_id, count, contentIDs, reinterpret_cast<AM_ContentInfo*>(title_buf->data));
+        free(contentIDs);
+        amExit();
+        if (R_FAILED(res)) {
+            mi.ResizeLastResultBuffer(title_buf, 0);
+            mi.FinishGood(res);
+            return;
+        }
+
+        mi.FinishGood(res);
+    }
+
+    void AMAPP_ListDLCContentInfos_(ArticBaseServer::MethodInterface& mi) {
+        bool good = true;
+        s32 count;
+        s8 mediatype;
+        s64 title_id;
+        s32 start_index;
+
+        if (good) good = mi.GetParameterS32(count);
+        if (good) good = mi.GetParameterS8(mediatype);
+        if (good) good = mi.GetParameterS64(title_id);
+        if (good) good = mi.GetParameterS32(start_index);
+
+        if (good) good = mi.FinishInputParameters();
+
+        if (!good) return;
+
+        ArticBaseCommon::Buffer* content_buf = mi.ReserveResultBuffer(0, count * sizeof(AM_ContentInfo));
+        if (!content_buf) {
+            return;
+        }
+
+        CTRPluginFramework::Lock l(amMutex);
+        Result res = amAppInit();
+        if (R_FAILED(res)) {
+            mi.ResizeLastResultBuffer(content_buf, 0);
+            mi.FinishGood(res);
+            return;
+        }
+
+        u32 contentRead = 0;
+        res = AMAPP_ListDLCContentInfos(&contentRead, static_cast<FS_MediaType>(mediatype), title_id, count, start_index, reinterpret_cast<AM_ContentInfo*>(content_buf->data));
+        amExit();
+        if (R_FAILED(res)) {
+            mi.ResizeLastResultBuffer(content_buf, 0);
+            mi.FinishGood(res);
+            return;
+        }
+
+        mi.ResizeLastResultBuffer(content_buf, sizeof(AM_ContentInfo) * contentRead);
+        mi.FinishGood(res);
+    }
+
+    void AMAPP_GetDLCTitleInfos_(ArticBaseServer::MethodInterface& mi) {
+        bool good = true;
+        s8 mediatype;
+        void* titleList; size_t titleListSize;
+
+        if (good) good = mi.GetParameterS8(mediatype);
+        if (good) good = mi.GetParameterBuffer(titleList, titleListSize);
+
+        if (good) good = mi.FinishInputParameters();
+
+        if (!good) return;
+
+        CTRPluginFramework::Lock l(amMutex);
+        Result res = amAppInit();
+        if (R_FAILED(res)) {
+            mi.FinishGood(res);
+            return;
+        }
+
+        // Cannot use output buffer while using input at the same time, need to allocate
+        u64* titleIDs = (u64*)malloc(titleListSize);
+        memcpy(titleIDs, titleList, titleListSize);
+        u32 count = titleListSize / sizeof(u64);
+
+        ArticBaseCommon::Buffer* title_buf = mi.ReserveResultBuffer(0, count * sizeof(AM_TitleEntry));
+        if (!title_buf) {
+            free(titleIDs);
+            return;
+        }
+        
+        res = AMAPP_GetDLCTitleInfos(static_cast<FS_MediaType>(mediatype), count, titleIDs, reinterpret_cast<AM_TitleEntry*>(title_buf->data));
+        free(titleIDs);
+        amExit();
+        if (R_FAILED(res)) {
+            mi.ResizeLastResultBuffer(title_buf, 0);
+            mi.FinishGood(res);
+            return;
+        }
+
+        mi.FinishGood(res);
+    }
+
+    void AMAPP_ListDataTitleTicketInfos_(ArticBaseServer::MethodInterface& mi) {
+        bool good = true;
+        s32 count;
+        s64 title_id;
+        s32 start_index;
+
+        if (good) good = mi.GetParameterS32(count);
+        if (good) good = mi.GetParameterS64(title_id);
+        if (good) good = mi.GetParameterS32(start_index);
+
+        if (good) good = mi.FinishInputParameters();
+
+        if (!good) return;
+
+        ArticBaseCommon::Buffer* content_buf = mi.ReserveResultBuffer(0, count * sizeof(AM_TicketInfo));
+        if (!content_buf) {
+            return;
+        }
+
+        CTRPluginFramework::Lock l(amMutex);
+        Result res = amAppInit();
+        if (R_FAILED(res)) {
+            mi.ResizeLastResultBuffer(content_buf, 0);
+            mi.FinishGood(res);
+            return;
+        }
+
+        u32 ticketsRead = 0;
+        res = AMAPP_ListDataTitleTicketInfos(&ticketsRead, title_id, count, start_index, reinterpret_cast<AM_TicketInfo*>(content_buf->data));
+        amExit();
+        if (R_FAILED(res)) {
+            mi.ResizeLastResultBuffer(content_buf, 0);
+            mi.FinishGood(res);
+            return;
+        }
+
+        mi.ResizeLastResultBuffer(content_buf, sizeof(AM_TicketInfo) * ticketsRead);
+        mi.FinishGood(res);
+    }
+
+    void AMAPP_GetPatchTitleInfos_(ArticBaseServer::MethodInterface& mi) {
+        bool good = true;
+        s8 mediatype;
+        void* titleList; size_t titleListSize;
+
+        if (good) good = mi.GetParameterS8(mediatype);
+        if (good) good = mi.GetParameterBuffer(titleList, titleListSize);
+
+        if (good) good = mi.FinishInputParameters();
+
+        if (!good) return;
+
+        CTRPluginFramework::Lock l(amMutex);
+        Result res = amAppInit();
+        if (R_FAILED(res)) {
+            mi.FinishGood(res);
+            return;
+        }
+
+        // Cannot use output buffer while using input at the same time, need to allocate
+        u64* titleIDs = (u64*)malloc(titleListSize);
+        memcpy(titleIDs, titleList, titleListSize);
+        u32 count = titleListSize / sizeof(u64);
+
+        ArticBaseCommon::Buffer* title_buf = mi.ReserveResultBuffer(0, count * sizeof(AM_TitleEntry));
+        if (!title_buf) {
+            free(titleIDs);
+            return;
+        }
+        
+        res = AMAPP_GetPatchTitleInfos(static_cast<FS_MediaType>(mediatype), count, titleIDs, reinterpret_cast<AM_TitleEntry*>(title_buf->data));
+        free(titleIDs);
+        amExit();
+        if (R_FAILED(res)) {
+            mi.ResizeLastResultBuffer(title_buf, 0);
+            mi.FinishGood(res);
+            return;
+        }
+
+        mi.FinishGood(res);
+    }
+
+    void CFGU_GetConfigInfoBlk2_(ArticBaseServer::MethodInterface& mi) {
+        bool good = true;
+        s32 block_id, size;
+
+        if (good) good = mi.GetParameterS32(block_id);
+        if (good) good = mi.GetParameterS32(size);
+
+        if (good) good = mi.FinishInputParameters();
+
+        if (!good) return;
+
+        CTRPluginFramework::Lock l(cfgMutex);
+        Result res = cfguInit();
+        if (R_FAILED(res)) {
+            mi.FinishGood(res);
+            return;
+        }
+
+        ArticBaseCommon::Buffer* conf_buf = mi.ReserveResultBuffer(0, size);
+        if (!conf_buf) {
+            return;
+        }
+
+        res = CFGU_GetConfigInfoBlk2(static_cast<u32>(size), static_cast<u32>(block_id), conf_buf->data);
+        cfguExit();
+        if (R_FAILED(res)) {
+            mi.ResizeLastResultBuffer(conf_buf, 0);
+            mi.FinishGood(res);
+            return;
+        }
 
         mi.FinishGood(res);
     }
@@ -1152,6 +1586,7 @@ namespace ArticBaseFunctions {
         {METHOD_NAME("FSUSER_GetThisSaveDataSecVal"), FSUSER_GetThisSaveDataSecureValue_},
         {METHOD_NAME("FSUSER_CreateExtSaveData"), FSUSER_CreateExtSaveData_},
         {METHOD_NAME("FSUSER_DeleteExtSaveData"), FSUSER_DeleteExtSaveData_},
+        {METHOD_NAME("FSUSER_CreateSysSaveData"), FSUSER_CreateSysSaveData_},
         {METHOD_NAME("FSFILE_Close"), FSFILE_Close_},
         {METHOD_NAME("FSFILE_SetAttributes"), FSFILE_SetAttributes_},
         {METHOD_NAME("FSFILE_GetAttributes"), FSFILE_GetAttributes_},
@@ -1162,6 +1597,16 @@ namespace ArticBaseFunctions {
         {METHOD_NAME("FSFILE_Flush"), FSFILE_Flush_},
         {METHOD_NAME("FSDIR_Read"), FSDIR_Read_},
         {METHOD_NAME("FSDIR_Close"), FSDIR_Close_},
+        {METHOD_NAME("AM_GetTitleCount"), AM_GetTitleCount_},
+        {METHOD_NAME("AM_GetTitleList"), AM_GetTitleList_},
+        {METHOD_NAME("AM_GetTitleInfo"), AM_GetTitleInfo_},
+        {METHOD_NAME("AMAPP_GetDLCContentInfoCount"), AMAPP_GetDLCContentInfoCount_},
+        {METHOD_NAME("AMAPP_FindDLCContentInfos"), AMAPP_FindDLCContentInfos_},
+        {METHOD_NAME("AMAPP_ListDLCContentInfos"), AMAPP_ListDLCContentInfos_},
+        {METHOD_NAME("AMAPP_GetDLCTitleInfos"), AMAPP_GetDLCTitleInfos_},
+        {METHOD_NAME("AMAPP_ListDataTitleTicketInfos"), AMAPP_ListDataTitleTicketInfos_},
+        {METHOD_NAME("AMAPP_GetPatchTitleInfos"), AMAPP_GetPatchTitleInfos_},
+        {METHOD_NAME("CFGU_GetConfigInfoBlk2"), CFGU_GetConfigInfoBlk2_},
     };
 
     bool obtainExheader() {
