@@ -221,6 +221,37 @@ bool ArticBaseServer::Write(int& sockFD, void* buffer, size_t size) {
     return write_bytes == size;
 }
 
+size_t ArticBaseServer::RecvFrom(int& sockFD, void* buffer, size_t size, void* addr, void* addr_size) {
+    while (true) {
+        int new_read = recvfrom(sockFD, buffer, size, 0, (sockaddr*)addr, (socklen_t*)addr_size);
+        if (new_read < 0) {
+            if (errno == EWOULDBLOCK) {
+                svcSleepThread(1000000);
+                continue;
+            }
+            return 0;
+        }
+        transferedBytes += new_read;
+        return new_read;
+    }
+}
+
+size_t ArticBaseServer::SendTo(int& sockFD, void* buffer, size_t size, void* addr, void* addr_size) {
+    socklen_t addr_len = *(socklen_t*)addr_size;
+    while (true) {
+        int new_written = sendto(sockFD, buffer, size, 0, (sockaddr*)addr, addr_len);
+        if (new_written < 0) {
+            if (errno == EWOULDBLOCK) {
+                svcSleepThread(1000000);
+                continue;
+            }
+            return 0;
+        }
+        transferedBytes += new_written;
+        return new_written;
+    }
+}
+
 ArticBaseServer::RequestHandler::RequestHandler(ArticBaseServer* serv, int id) {
     server = serv;
     this->id = id;

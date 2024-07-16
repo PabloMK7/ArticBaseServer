@@ -30,6 +30,12 @@ static bool should_run = true;
 static int listen_fd = -1;
 static int accept_fd = -1;
 static ArticBaseServer* articBase = nullptr;
+static bool wasControllerMode = false;
+static bool everControllerMode = false;
+static bool reloadBottomText = false;
+
+int transferedBytes = 0;
+bool isControllerMode = false;
 
 extern "C" {
     #include "csvc.h"
@@ -159,13 +165,15 @@ void Start(void* arg) {
         for (auto it = ArticBaseFunctions::destructFunctions.begin(); it != ArticBaseFunctions::destructFunctions.end(); it++) {
             (*it)();
         }
+        isControllerMode = false;
+        everControllerMode = false;
     }
     socExit();
     free(SOC_buffer);
 }
 
 PrintConsole topScreenConsole, bottomScreenConsole;
-int transferedBytes = 0;
+
 void Main() {
     logger.Start();
 
@@ -195,13 +203,39 @@ void Main() {
     {
         CTRPluginFramework::BCLIM((void*)__data_logo_bin, __data_logo_bin_size).Render(CTRPluginFramework::Rect<int>((320 - 128) / 2, (240 - 128) / 2, 128, 128));
     }
-    logger.Raw(false, "\n             ArticBase v%d.%d.%d\n", VERSION_MAJOR, VERSION_MINOR, VERSION_REVISION);
-    logger.Raw(false, "    Press A to enter sleep.");
-    logger.Raw(false, "    Press X to show debug log.");
-    logger.Raw(false, "    Press Y to restart server.");
-    logger.Raw(false, "    Press START to exit.");
 
+    auto print_bottom_info = [](bool controller_mode) {
+        if (controller_mode) {
+            logger.Raw(false,   "\n            ArticBase v%d.%d.%d\n\n"
+                                "        Artic Controller enabled       \n"
+                                "                                       \n"
+                                "  - X + START + SELECT: Exit           \n"
+                                "    Artic Controller mode              \n"
+                                "                                        "
+                                , VERSION_MAJOR, VERSION_MINOR, VERSION_REVISION);
+        } else {
+            if (everControllerMode) {
+                logger.Raw(false,   "\n            ArticBase v%d.%d.%d\n\n"
+                                "  - A:      Enter sleep                \n"
+                                "  - X:      Show debug log             \n"
+                                "  - Y:      Restart server             \n"
+                                "  - START:  Exit                       \n"
+                                "  - SELECT: Enter Artic controller mode "
+                                , VERSION_MAJOR, VERSION_MINOR, VERSION_REVISION);
+            } else {
+                logger.Raw(false,   "\n            ArticBase v%d.%d.%d\n\n"
+                                "  - A:      Enter sleep                \n"
+                                "  - X:      Show debug log             \n"
+                                "  - Y:      Restart server             \n"
+                                "  - START:  Exit                       \n"
+                                "                                        "
+                                , VERSION_MAJOR, VERSION_MINOR, VERSION_REVISION);
+            }
+            
+        }
+    };
     
+    print_bottom_info(false);
     logger.Raw(true, "");
 
     bool setupCorrect = true;
@@ -225,29 +259,44 @@ void Main() {
     
     while (aptMainLoop())
 	{
-		//Scan all the inputs. This should be done once for each frame
+        if (isControllerMode != wasControllerMode || reloadBottomText) {
+            reloadBottomText = false;
+            everControllerMode |= isControllerMode;
+            if (isControllerMode) {
+                logger.Info("Server: Controller mode enabled");
+            } else {
+                logger.Info("Server: Controller mode disabled");
+            }
+            print_bottom_info(isControllerMode);
+            wasControllerMode = isControllerMode;
+        }
+        
 		hidScanInput();
 
-		//hidKeysDown returns information about which buttons have been just pressed (and they weren't in the previous frame)
 		u32 kDown = hidKeysDown();
+        u32 kHeld = hidKeysHeld();
 
-        if ((kDown != 0) && sleeping) {
+        if (((kDown & ~KEY_SELECT) != 0) && sleeping && !isControllerMode) {
             sleeping = false;
             GSPLCD_PowerOnBacklight(3);
             continue;
         }
 
-        if ((kDown & KEY_A) && !sleeping) {
+        if ((kDown & KEY_A) && !sleeping && !isControllerMode) {
             sleeping = true;
             GSPLCD_PowerOffBacklight(3);
         }
 
-		if (kDown & KEY_START) {
+		if ((kDown & KEY_START) && !isControllerMode) {
             logger.Info("Server: Exiting");
             break;
         }
 
-        if (kDown & KEY_Y) {
+        if ((kDown & KEY_SELECT) && !isControllerMode && everControllerMode) {
+            isControllerMode = true;
+        }
+
+        if ((kDown & KEY_Y) && !isControllerMode) {
             if (articBase) {
                 logger.Info("Server: Restarting");
                 articBase->QueryStop();
@@ -256,7 +305,7 @@ void Main() {
             }
         }
 
-        if (kDown & KEY_X) {
+        if ((kDown & KEY_X) && !isControllerMode) {
             if (logger.debug_enable) {
                 logger.Info("Server: Debug log disabled");
                 logger.debug_enable = false;
@@ -264,6 +313,10 @@ void Main() {
                 logger.Info("Server: Debug log enabled");
                 logger.debug_enable = true;
             }
+        }
+
+        if (((kHeld & (KEY_X | KEY_START | KEY_SELECT)) == (KEY_X | KEY_START | KEY_SELECT)) && isControllerMode) {
+            isControllerMode = false;
         }
 
         if (clock.HasTimePassed(CTRPluginFramework::Seconds(1)))

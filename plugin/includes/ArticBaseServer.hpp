@@ -13,14 +13,15 @@ public:
     void Serve();
     void QueryStop();
 
-    static bool SetNonBlock(int sockFD, bool blocking);
+    static bool SetNonBlock(int sockFD, bool nonBlocking);
+    static bool Read(int& sockFD, void* buffer, size_t size);
+    static bool Write(int& sockFD, void* buffer, size_t size);
+    static size_t RecvFrom(int& sockFD, void* buffer, size_t size, void* addr, void* addr_size);
+    static size_t SendTo(int& sockFD, void* buffer, size_t size, void* addr, void* addr_size);
 private:
     void Stop();
     static constexpr size_t MAX_WORK_BUF_SIZE = 4 * 1024 * 1024 + 512 * 1024; // 4.5MB
     static constexpr size_t MAX_PARAM_AMOUNT = 10;
-
-    static bool Read(int& sockFD, void* buffer, size_t size);
-    static bool Write(int& sockFD, void* buffer, size_t size);
 
     class RequestHandler {
     public:
@@ -45,7 +46,7 @@ private:
         std::vector<ArticBaseCommon::RequestParameter> reqParameters;
     };
 
-    static constexpr const char* VERSION = "1";
+    static constexpr const char* VERSION = "2";
 
     int socketFd;
     bool run = true;

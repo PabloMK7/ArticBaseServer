@@ -25,7 +25,7 @@ LIBRARY_DIRS := $(PORTLIBS) $(CTRULIB) $(DEVKITPRO)/libcwav $(DEVKITPRO)/libncsn
 LIBRARIES := ctru
 
 VERSION_MAJOR := 1
-VERSION_MINOR := 1
+VERSION_MINOR := 2
 VERSION_MICRO := 0
 
 BUILD_FLAGS := -march=armv6k -mtune=mpcore -mfloat-abi=hard

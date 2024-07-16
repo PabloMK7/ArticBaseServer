@@ -1,8 +1,18 @@
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
 #include "ArticBaseFunctions.hpp"
 #include "Main.hpp"
 #include "amExtension.hpp"
 #include "fsExtension.hpp"
+#include "hidExtension.hpp"
 #include "CTRPluginFramework/CTRPluginFramework.hpp"
+#include "CTRPluginFramework/Clock.hpp"
+
+extern bool isControllerMode;
 
 namespace ArticBaseFunctions {
 
@@ -1547,9 +1557,224 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
+    void ArticController::Handler(void* arg) {
+        using namespace ArticController;
+
+        struct ControllerPacket {
+            u32 id;
+            u32 pad;
+            circlePosition c_pad;
+            touchPosition touch;
+            circlePosition c_stick;
+            accelVector accel;
+            angularRate gyro;
+        } packet;
+        u32 current_id = 0;
+        static_assert(sizeof(packet) == 0x20, "ControllerPacket invalid size");
+
+        constexpr int port = SERVER_PORT + 10;
+        struct sockaddr_in addr = {0};
+        socklen_t addr_size = static_cast<socklen_t>(sizeof(addr));
+        int res, failedCount = 0;
+
+        socket_fd = socket(AF_INET, SOCK_DGRAM, 0);
+        if (socket_fd < 0) {
+            logger.Error("ArticController: Cannot create socket");
+            socket_ready = true;
+            threadExit(1);
+            return;
+        }
+
+        if (!ArticBaseServer::SetNonBlock(socket_fd, true)) {
+            logger.Error("ArticController: Cannot set non-block");
+            close(socket_fd);
+            socket_fd = -1;
+            socket_ready = true;
+            threadExit(1);
+            return;
+        }
+
+        addr.sin_family      = AF_INET;
+        addr.sin_addr.s_addr = htonl(INADDR_ANY);
+        addr.sin_port        = htons(port);
+        res = bind(socket_fd, (struct sockaddr *)&addr, addr_size);
+        if (res < 0) {
+            logger.Error("ArticController: Failed to bind() to port %d", port);
+            close(socket_fd);
+            socket_fd = -1;
+            socket_ready = true;
+            threadExit(1);
+            return;
+        }
+        
+        socket_ready = true;
+
+        u8 a;
+        size_t transfered = ArticBaseServer::RecvFrom(socket_fd, &a, sizeof(a), &addr, &addr_size);
+        if (transfered > 0) {
+            logger.Debug("ArticController: Started");
+        } else {
+            logger.Error("ArticController: Error reading from socket");
+            close(socket_fd);
+            socket_fd = -1;
+            threadExit(1);
+            return;
+        }
+
+        constexpr CTRPluginFramework::Time INTERVAL = CTRPluginFramework::Milliseconds(2);
+        // hid scan input is done on the main thread, no need to do it here.
+        while (thread_run) {
+            CTRPluginFramework::Clock clock;
+
+            if (isControllerMode) {
+                packet.id = current_id++;
+                packet.pad = hidKeysHeld();
+                hidCircleRead(&packet.c_pad);
+                hidTouchRead(&packet.touch);
+                irrstCstickRead(&packet.c_stick);
+                hidAccelRead(&packet.accel);
+                hidGyroRead(&packet.gyro);
+
+                if (ArticBaseServer::SendTo(socket_fd, &packet, sizeof(packet), &addr, &addr_size) <= 0) {
+                    if (failedCount++ >= 1000) {
+                        logger.Error("ArticController: Error writing to socket");
+                        break;
+                    }
+                } else {
+                    failedCount = 0;
+                }
+            }
+
+            CTRPluginFramework::Time elapsed = clock.GetElapsedTime();
+            if (elapsed < INTERVAL) {
+                svcSleepThread((INTERVAL - elapsed).AsMicroseconds() * 1000);
+            }
+        }
+
+        close(socket_fd);
+        socket_fd = -1;
+        threadExit(1);
+    }
+
+    static bool stopController(void);
+    void Controller_Start(ArticBaseServer::MethodInterface& mi) {
+        bool good = true;
+
+        if (good) good = mi.FinishInputParameters();
+
+        if (!good) return;
+
+        constexpr int port = SERVER_PORT + 10;
+        ArticBaseCommon::Buffer* conf_buf = mi.ReserveResultBuffer(0, sizeof(int));
+        if (!conf_buf) {
+            return;
+        }
+        *(int*)conf_buf->data = port;
+
+        stopController();
+
+        s32 prio = 0;
+        svcGetThreadPriority(&prio, CUR_THREAD_HANDLE);
+        ArticController::socket_ready = false;
+        ArticController::thread_run = true;
+        ArticController::thread = threadCreate(ArticController::Handler, nullptr, 0x800, prio + 1, -2, false);
+        logger.Debug("ArticController: Starting...");
+        isControllerMode = true;
+
+        while (!ArticController::socket_ready) {
+            svcSleepThread(1000000);
+        }
+        ArticController::socket_ready = false;
+
+        mi.FinishGood(0);
+    }
+
+    void HIDUSER_EnableAccelerometer_(ArticBaseServer::MethodInterface& mi) {
+        bool good = true;
+
+        if (good) mi.FinishInputParameters();
+
+        Result res = HIDUSER_EnableAccelerometer();
+
+        mi.FinishGood(res);
+    }
+
+    void HIDUSER_DisableAccelerometer_(ArticBaseServer::MethodInterface& mi) {
+        bool good = true;
+
+        if (good) mi.FinishInputParameters();
+
+        Result res = HIDUSER_DisableAccelerometer();
+
+        mi.FinishGood(res);
+    }
+
+    void HIDUSER_EnableGyroscope_(ArticBaseServer::MethodInterface& mi) {
+        bool good = true;
+
+        if (good) mi.FinishInputParameters();
+
+        Result res = HIDUSER_EnableGyroscope();
+
+        mi.FinishGood(res);
+    }
+
+    void HIDUSER_DisableGyroscope_(ArticBaseServer::MethodInterface& mi) {
+        bool good = true;
+
+        if (good) mi.FinishInputParameters();
+
+        Result res = HIDUSER_DisableGyroscope();
+
+        mi.FinishGood(res);
+    }
+
+    void HIDUSER_GetGyroscopeRawToDpsCoefficient_(ArticBaseServer::MethodInterface& mi) {
+        bool good = true;
+
+        if (good) mi.FinishInputParameters();
+
+        float coef;
+        Result res = HIDUSER_GetGyroscopeRawToDpsCoefficient(&coef);
+        if (R_FAILED(res)) {
+            mi.FinishGood(res);
+            return;
+        }
+
+        ArticBaseCommon::Buffer* coef_buf = mi.ReserveResultBuffer(0, sizeof(float));
+        if (!coef_buf) {
+            return;
+        }
+        *(float*)coef_buf->data = coef;
+
+        mi.FinishGood(res);
+    }
+
+    
+    void HIDUSER_GetGyroscopeCalibrateParam_(ArticBaseServer::MethodInterface& mi) {
+        bool good = true;
+
+        if (good) mi.FinishInputParameters();
+
+        GyroscopeCalibrateParam param = { 0 };
+        Result res = HIDUSER_GetGyroscopeCalibrateParam(&param);
+        if (R_FAILED(res)) {
+            mi.FinishGood(res);
+            return;
+        }
+
+        ArticBaseCommon::Buffer* coef_buf = mi.ReserveResultBuffer(0, sizeof(param));
+        if (!coef_buf) {
+            return;
+        }
+        *(GyroscopeCalibrateParam*)coef_buf->data = param;
+
+        mi.FinishGood(res);
+    }
+
     template<std::size_t N>
     constexpr auto& METHOD_NAME(char const (&s)[N]) {
-        static_assert(N < sizeof(ArticBaseCommon::RequestPacket::method), "String exceeds 10 bytes!");
+        static_assert(N < sizeof(ArticBaseCommon::RequestPacket::method), "String exceeds 32 bytes!");
         return s;
     }
 
@@ -1607,6 +1832,15 @@ namespace ArticBaseFunctions {
         {METHOD_NAME("AMAPP_ListDataTitleTicketInfos"), AMAPP_ListDataTitleTicketInfos_},
         {METHOD_NAME("AMAPP_GetPatchTitleInfos"), AMAPP_GetPatchTitleInfos_},
         {METHOD_NAME("CFGU_GetConfigInfoBlk2"), CFGU_GetConfigInfoBlk2_},
+        {METHOD_NAME("HIDUSER_EnableAccelerometer"), HIDUSER_EnableAccelerometer_},
+        {METHOD_NAME("HIDUSER_DisableAccelerometer"), HIDUSER_DisableAccelerometer_},
+        {METHOD_NAME("HIDUSER_EnableGyroscope"), HIDUSER_EnableGyroscope_},
+        {METHOD_NAME("HIDUSER_DisableGyroscope"), HIDUSER_DisableGyroscope_},
+        {METHOD_NAME("HIDUSER_GetGyroRawToDpsCoef"), HIDUSER_GetGyroscopeRawToDpsCoefficient_},
+        {METHOD_NAME("HIDUSER_GetGyroCalibrateParam"), HIDUSER_GetGyroscopeCalibrateParam_},
+
+        // UDP Streams
+        {METHOD_NAME("#ArticController"), Controller_Start},
     };
 
     bool obtainExheader() {
@@ -1654,11 +1888,33 @@ namespace ArticBaseFunctions {
         return true;
     }
 
+    static bool stopController(void) {
+        if (ArticController::thread_run) {
+            logger.Debug("ArticController: Stopping...");
+            ArticController::thread_run = false;
+            if (ArticController::socket_fd != -1) {
+                close(ArticController::socket_fd);
+                ArticController::socket_fd = -1;
+            }
+            threadJoin(ArticController::thread, U64_MAX);
+            threadFree(ArticController::thread);
+            ArticController::thread = nullptr;
+            logger.Debug("ArticController: Stopped...");
+        }
+        return true;
+    }
+
     std::vector<bool(*)()> setupFunctions {
         obtainExheader,
     };
 
     std::vector<bool(*)()> destructFunctions {
         closeHandles,
+        stopController,
     };
+
+    Thread ArticController::thread = nullptr;
+    bool ArticController::thread_run = false;
+    int ArticController::socket_fd = -1;
+    volatile bool ArticController::socket_ready = false;
 }

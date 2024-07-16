@@ -15,7 +15,7 @@ INCLUDES	:= 	includes
 SOURCES 	:= 	sources sources/CTRPluginFramework
 
 VERSION_MAJOR := 1
-VERSION_MINOR := 1
+VERSION_MINOR := 2
 VERSION_REVISION := 0
 SERVER_PORT := 5543
 

@@ -13,6 +13,7 @@ Artic Base Server is a Luma3DS 3GX plugin that allows using the Artic Base proto
 ### Features
 - Play games from your console without having to dump them, with purchased updates and DLC.
 - Sync the savedata/extdata of the broadcasted game during the play session.
+- Use the console as the input device by enabling the Artic Controller feature on the emulator.
 - Load shared ext data and NCCH archives from your console.
 - Remove the need to dump AES keys, as the decryption is done by the console's OS.
 
@@ -39,7 +40,6 @@ NOTE: A recent version of Luma3DS (v13.1.1 or newer) is requires to use Artic Ba
 This section lists features that Artic Base Server cannot currently provide. Some of these features may be added in the future.
 
 ### Things that might be implemented
-- Use the console as a controller itself.
 - Broadcasting homebrew applications
 
 ### Things that will never be implemented

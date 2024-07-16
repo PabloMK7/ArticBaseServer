@@ -141,7 +141,10 @@ void Logger::Handler() {
             switch (log.type)
             {
             case PendingLog::Type::RAW:
+                back = bottomScreenConsole.cursorY;
+                bottomScreenConsole.cursorY = 0;
                 printf("%s\n", log.string.c_str());
+                bottomScreenConsole.cursorY = back;
                 break;
             case PendingLog::Type::DEBUG:
                 printf("[D] %s\n", log.string.c_str());
