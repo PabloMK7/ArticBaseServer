@@ -1,0 +1,3 @@
+[submodule "plugin/ArticProtocol"]
+	path = plugin/ArticProtocol
+	url = https://github.com/PabloMK7/ArticProtocol.git

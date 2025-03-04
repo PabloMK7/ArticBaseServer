@@ -11,8 +11,8 @@ TARGET		:= 	ArticBase
 PLGINFO 	:= 	build/ArticBase.plgInfo
 
 BUILD		:= 	build
-INCLUDES	:= 	includes
-SOURCES 	:= 	sources sources/CTRPluginFramework
+INCLUDES	:= 	ArticProtocol/includes includes
+SOURCES 	:=  ArticProtocol/sources sources sources/CTRPluginFramework
 
 VERSION_MAJOR := 1
 VERSION_MINOR := 2
