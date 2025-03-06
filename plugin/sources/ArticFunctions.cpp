@@ -4,7 +4,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#include "ArticBaseFunctions.hpp"
+#include "ArticFunctions.hpp"
+#include "ArticFunctionsPrivate.hpp"
 #include "Main.hpp"
 #include "amExtension.hpp"
 #include "fsExtension.hpp"
@@ -14,21 +15,21 @@
 
 extern bool isControllerMode;
 
-namespace ArticBaseFunctions {
+namespace ArticFunctions {
 
     ExHeader_Info lastAppExheader;
     std::map<u64, HandleType> openHandles;
     CTRPluginFramework::Mutex amMutex;
     CTRPluginFramework::Mutex cfgMutex;
 
-    void Process_GetTitleID(ArticBaseServer::MethodInterface& mi) {
+    void Process_GetTitleID(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
 
         if (good) good = mi.FinishInputParameters();
 
         if (!good) return;
 
-        ArticBaseCommon::Buffer* tid_buffer = mi.ReserveResultBuffer(0, sizeof(u64));
+        ArticProtocolCommon::Buffer* tid_buffer = mi.ReserveResultBuffer(0, sizeof(u64));
         if (!tid_buffer) {
             return;
         }
@@ -40,14 +41,14 @@ namespace ArticBaseFunctions {
         mi.FinishGood(0);
     }
 
-    void Process_GetProductInfo(ArticBaseServer::MethodInterface& mi) {
+    void Process_GetProductInfo(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
 
         if (good) good = mi.FinishInputParameters();
 
         if (!good) return;
 
-        ArticBaseCommon::Buffer* prod_code_buffer = mi.ReserveResultBuffer(0, sizeof(FS_ProductInfo));
+        ArticProtocolCommon::Buffer* prod_code_buffer = mi.ReserveResultBuffer(0, sizeof(FS_ProductInfo));
         if (!prod_code_buffer) {
             return;
         }
@@ -64,14 +65,14 @@ namespace ArticBaseFunctions {
         mi.FinishGood(0);
     }
 
-    void Process_GetExheader(ArticBaseServer::MethodInterface& mi) {
+    void Process_GetExheader(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
 
         if (good) good = mi.FinishInputParameters();
 
         if (!good) return;
 
-        ArticBaseCommon::Buffer* exheader_buf = mi.ReserveResultBuffer(0, sizeof(lastAppExheader));
+        ArticProtocolCommon::Buffer* exheader_buf = mi.ReserveResultBuffer(0, sizeof(lastAppExheader));
         if (!exheader_buf) {
             return;
         }
@@ -80,7 +81,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(0);
     }
 
-    void Process_ReadCode(ArticBaseServer::MethodInterface& mi) {
+    void Process_ReadCode(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
         s32 offset, size;
 
@@ -96,7 +97,7 @@ namespace ArticBaseFunctions {
         }
         u8* start_addr = reinterpret_cast<u8*>(out);
 
-        ArticBaseCommon::Buffer* code_buf = mi.ReserveResultBuffer(0, size);
+        ArticProtocolCommon::Buffer* code_buf = mi.ReserveResultBuffer(0, size);
         if (!code_buf) {
             return;
         }
@@ -105,7 +106,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(0);
     }
 
-    static void _Process_ReadExefs(ArticBaseServer::MethodInterface& mi, const char* section) {
+    static void _Process_ReadExefs(ArticProtocolServer::MethodInterface& mi, const char* section) {
         bool good = true;
 
         if (good) good = mi.FinishInputParameters();
@@ -139,7 +140,7 @@ namespace ArticBaseFunctions {
             return;
         }
 
-        ArticBaseCommon::Buffer* icon_buf = mi.ReserveResultBuffer(0, static_cast<size_t>(file_size));
+        ArticProtocolCommon::Buffer* icon_buf = mi.ReserveResultBuffer(0, static_cast<size_t>(file_size));
         if (!icon_buf) {
             FSFILE_Close(fd);
             return;
@@ -160,19 +161,19 @@ namespace ArticBaseFunctions {
         mi.FinishGood(0);
     }
 
-    void Process_ReadIcon(ArticBaseServer::MethodInterface& mi) {
+    void Process_ReadIcon(ArticProtocolServer::MethodInterface& mi) {
         _Process_ReadExefs(mi, "icon");
     }
 
-    void Process_ReadBanner(ArticBaseServer::MethodInterface& mi) {
+    void Process_ReadBanner(ArticProtocolServer::MethodInterface& mi) {
         _Process_ReadExefs(mi, "banner");
     }
 
-    void Process_ReadLogo(ArticBaseServer::MethodInterface& mi) {
+    void Process_ReadLogo(ArticProtocolServer::MethodInterface& mi) {
         _Process_ReadExefs(mi, "logo");
     }
 
-    bool GetFSPath(ArticBaseServer::MethodInterface& mi, FS_Path& path) {
+    bool GetFSPath(ArticProtocolServer::MethodInterface& mi, FS_Path& path) {
         void* pathPtr; size_t pathSize;
         
         if (!mi.GetParameterBuffer(pathPtr, pathSize))
@@ -189,7 +190,7 @@ namespace ArticBaseFunctions {
         return true;
     }
 
-    void FSUSER_OpenFileDirectly_(ArticBaseServer::MethodInterface& mi) {
+    void FSUSER_OpenFileDirectly_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
 
         s32 archiveID;
@@ -216,7 +217,7 @@ namespace ArticBaseFunctions {
             return;
         }
 
-        ArticBaseCommon::Buffer* handle_buf = mi.ReserveResultBuffer(0, sizeof(Handle));
+        ArticProtocolCommon::Buffer* handle_buf = mi.ReserveResultBuffer(0, sizeof(Handle));
         if (!handle_buf) {
             FSFILE_Close(out);
             return;
@@ -228,7 +229,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSUSER_OpenArchive_(ArticBaseServer::MethodInterface& mi) {
+    void FSUSER_OpenArchive_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
 
         s32 archiveID;
@@ -249,7 +250,7 @@ namespace ArticBaseFunctions {
             return;
         }
 
-        ArticBaseCommon::Buffer* handle_buf = mi.ReserveResultBuffer(0, sizeof(FS_Archive));
+        ArticProtocolCommon::Buffer* handle_buf = mi.ReserveResultBuffer(0, sizeof(FS_Archive));
         if (!handle_buf) {
             FSUSER_CloseArchive(out);
             return;
@@ -261,7 +262,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSUSER_CloseArchive_(ArticBaseServer::MethodInterface& mi) {
+    void FSUSER_CloseArchive_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
 
         FS_Archive archive;
@@ -278,7 +279,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSUSER_OpenFile_(ArticBaseServer::MethodInterface& mi) {
+    void FSUSER_OpenFile_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
 
         FS_Archive archive;
@@ -303,7 +304,7 @@ namespace ArticBaseFunctions {
             return;
         }
 
-        ArticBaseCommon::Buffer* handle_buf = mi.ReserveResultBuffer(0, sizeof(Handle));
+        ArticProtocolCommon::Buffer* handle_buf = mi.ReserveResultBuffer(0, sizeof(Handle));
         if (!handle_buf) {
             FSFILE_Close(out);
             return;
@@ -315,7 +316,7 @@ namespace ArticBaseFunctions {
         u64 fileSize;
         Result res2 = FSFILE_GetSize(out, &fileSize);
         if (R_SUCCEEDED(res2)) {
-            ArticBaseCommon::Buffer* size_buf = mi.ReserveResultBuffer(1, sizeof(u64));
+            ArticProtocolCommon::Buffer* size_buf = mi.ReserveResultBuffer(1, sizeof(u64));
             if (!size_buf) {
                 FSFILE_Close(out);
                 return;
@@ -328,7 +329,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSUSER_CreateFile_(ArticBaseServer::MethodInterface& mi) {
+    void FSUSER_CreateFile_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
 
         FS_Archive archive;
@@ -351,7 +352,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSUSER_DeleteFile_(ArticBaseServer::MethodInterface& mi) {
+    void FSUSER_DeleteFile_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
 
         FS_Archive archive;
@@ -369,7 +370,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSUSER_RenameFile_(ArticBaseServer::MethodInterface& mi) {
+    void FSUSER_RenameFile_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
 
         FS_Archive srcarchive;
@@ -391,7 +392,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSUSER_OpenDirectory_(ArticBaseServer::MethodInterface& mi) {
+    void FSUSER_OpenDirectory_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
 
         FS_Archive archive;
@@ -412,7 +413,7 @@ namespace ArticBaseFunctions {
             return;
         }
 
-        ArticBaseCommon::Buffer* handle_buf = mi.ReserveResultBuffer(0, sizeof(Handle));
+        ArticProtocolCommon::Buffer* handle_buf = mi.ReserveResultBuffer(0, sizeof(Handle));
         if (!handle_buf) {
             FSDIR_Close(out);
             return;
@@ -424,7 +425,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSUSER_CreateDirectory_(ArticBaseServer::MethodInterface& mi) {
+    void FSUSER_CreateDirectory_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
 
         FS_Archive archive;
@@ -445,7 +446,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSUSER_DeleteDirectory_(ArticBaseServer::MethodInterface& mi) {
+    void FSUSER_DeleteDirectory_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
 
         FS_Archive archive;
@@ -464,7 +465,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSUSER_DeleteDirectoryRecursively_(ArticBaseServer::MethodInterface& mi) {
+    void FSUSER_DeleteDirectoryRecursively_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
 
         FS_Archive archive;
@@ -483,7 +484,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSUSER_RenameDirectory_(ArticBaseServer::MethodInterface& mi) {
+    void FSUSER_RenameDirectory_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
 
         FS_Archive srcarchive;
@@ -505,7 +506,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSUSER_ControlArchive_(ArticBaseServer::MethodInterface& mi) {
+    void FSUSER_ControlArchive_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
 
         FS_Archive archive;
@@ -530,7 +531,7 @@ namespace ArticBaseFunctions {
 
         Result res = FSUSER_ControlArchive(archive, action, input, inputSize, output, outputSize);
 
-        ArticBaseCommon::Buffer* out_buf = mi.ReserveResultBuffer(0, outputSize);
+        ArticProtocolCommon::Buffer* out_buf = mi.ReserveResultBuffer(0, outputSize);
         if (!out_buf) {
             free(output);
             return;
@@ -541,7 +542,7 @@ namespace ArticBaseFunctions {
         free(output);
     }
 
-    void FSUSER_GetFreeBytes_(ArticBaseServer::MethodInterface& mi) {
+    void FSUSER_GetFreeBytes_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
 
         FS_Archive archive;
@@ -559,7 +560,7 @@ namespace ArticBaseFunctions {
             return;
         }
 
-        ArticBaseCommon::Buffer* size_buf = mi.ReserveResultBuffer(0, sizeof(u64));
+        ArticProtocolCommon::Buffer* size_buf = mi.ReserveResultBuffer(0, sizeof(u64));
         if (!size_buf) {
             return;
         }
@@ -568,7 +569,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSUSER_GetFormatInfo_(ArticBaseServer::MethodInterface& mi) {
+    void FSUSER_GetFormatInfo_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
 
         s32 archiveID;
@@ -597,7 +598,7 @@ namespace ArticBaseFunctions {
         archive_format_info.number_files = files;
         archive_format_info.duplicate_data = duplicateData;
 
-        ArticBaseCommon::Buffer* format_info_buf = mi.ReserveResultBuffer(0, sizeof(archive_format_info));
+        ArticProtocolCommon::Buffer* format_info_buf = mi.ReserveResultBuffer(0, sizeof(archive_format_info));
         if (!format_info_buf) {
             return;
         }
@@ -606,7 +607,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSUSER_FormatSaveData_(ArticBaseServer::MethodInterface& mi) {
+    void FSUSER_FormatSaveData_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
 
         s32 archiveID;
@@ -631,7 +632,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSUSER_ObsoletedSetSaveDataSecureValue_(ArticBaseServer::MethodInterface& mi) {
+    void FSUSER_ObsoletedSetSaveDataSecureValue_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
 
         s64 secure_value;
@@ -653,7 +654,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSUSER_ObsoletedGetSaveDataSecureValue_(ArticBaseServer::MethodInterface& mi) {
+    void FSUSER_ObsoletedGetSaveDataSecureValue_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
         
         s32 slot;
@@ -682,7 +683,7 @@ namespace ArticBaseFunctions {
         } secure_value_result;
         static_assert(sizeof(secure_value_result) == 0x10);
 
-        ArticBaseCommon::Buffer* sec_val_buf = mi.ReserveResultBuffer(0, sizeof(secure_value_result));
+        ArticProtocolCommon::Buffer* sec_val_buf = mi.ReserveResultBuffer(0, sizeof(secure_value_result));
         if (!sec_val_buf) {
             return;
         }
@@ -693,7 +694,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSUSER_ControlSecureSave_(ArticBaseServer::MethodInterface& mi) {
+    void FSUSER_ControlSecureSave_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
 
         s32 action;
@@ -716,7 +717,7 @@ namespace ArticBaseFunctions {
 
         Result res = FSUSER_ControlSecureSave((FS_SecureSaveAction)action, input, inputSize, output, outputSize);
 
-        ArticBaseCommon::Buffer* out_buf = mi.ReserveResultBuffer(0, outputSize);
+        ArticProtocolCommon::Buffer* out_buf = mi.ReserveResultBuffer(0, outputSize);
         if (!out_buf) {
             free(output);
             return;
@@ -727,7 +728,7 @@ namespace ArticBaseFunctions {
         free(output);
     }
 
-    void FSUSER_SetSaveDataSecureValue_(ArticBaseServer::MethodInterface& mi) {
+    void FSUSER_SetSaveDataSecureValue_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
 
         FS_Archive archive;
@@ -749,7 +750,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSUSER_GetSaveDataSecureValue_(ArticBaseServer::MethodInterface& mi) {
+    void FSUSER_GetSaveDataSecureValue_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
         
         FS_Archive archive;
@@ -777,7 +778,7 @@ namespace ArticBaseFunctions {
         } secure_value_result;
         static_assert(sizeof(secure_value_result) == 0x10);
 
-        ArticBaseCommon::Buffer* sec_val_buf = mi.ReserveResultBuffer(0, sizeof(secure_value_result));
+        ArticProtocolCommon::Buffer* sec_val_buf = mi.ReserveResultBuffer(0, sizeof(secure_value_result));
         if (!sec_val_buf) {
             return;
         }
@@ -789,7 +790,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSUSER_SetThisSaveDataSecureValue_(ArticBaseServer::MethodInterface& mi) {
+    void FSUSER_SetThisSaveDataSecureValue_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
 
         s32 slot;
@@ -807,7 +808,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSUSER_GetThisSaveDataSecureValue_(ArticBaseServer::MethodInterface& mi) {
+    void FSUSER_GetThisSaveDataSecureValue_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
         
         s32 slot;
@@ -833,7 +834,7 @@ namespace ArticBaseFunctions {
         } secure_value_result;
         static_assert(sizeof(secure_value_result) == 0x10);
 
-        ArticBaseCommon::Buffer* sec_val_buf = mi.ReserveResultBuffer(0, sizeof(secure_value_result));
+        ArticProtocolCommon::Buffer* sec_val_buf = mi.ReserveResultBuffer(0, sizeof(secure_value_result));
         if (!sec_val_buf) {
             return;
         }
@@ -845,7 +846,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSUSER_CreateExtSaveData_(ArticBaseServer::MethodInterface& mi) {
+    void FSUSER_CreateExtSaveData_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
 
         FS_ExtSaveDataInfo info;
@@ -875,7 +876,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSUSER_DeleteExtSaveData_(ArticBaseServer::MethodInterface& mi) {
+    void FSUSER_DeleteExtSaveData_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
 
         FS_ExtSaveDataInfo info;
@@ -898,7 +899,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSUSER_CreateSysSaveData_(ArticBaseServer::MethodInterface& mi) {
+    void FSUSER_CreateSysSaveData_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
         s8 duplicate_data;
         s32 high, low, total_size, block_size, number_directories, number_files, number_directory_buckets, number_file_buckets;
@@ -926,7 +927,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSFILE_Close_(ArticBaseServer::MethodInterface& mi) {
+    void FSFILE_Close_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
         s32 handle;
 
@@ -942,7 +943,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSFILE_SetSize_(ArticBaseServer::MethodInterface& mi) {
+    void FSFILE_SetSize_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
         s32 handle;
         s64 size;
@@ -959,7 +960,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSFILE_GetSize_(ArticBaseServer::MethodInterface& mi) {
+    void FSFILE_GetSize_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
         s32 handle;
 
@@ -976,7 +977,7 @@ namespace ArticBaseFunctions {
             return;
         }
 
-        ArticBaseCommon::Buffer* size_buf = mi.ReserveResultBuffer(0, sizeof(u64));
+        ArticProtocolCommon::Buffer* size_buf = mi.ReserveResultBuffer(0, sizeof(u64));
         if (!size_buf) {
             return;
         }
@@ -985,7 +986,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSFILE_SetAttributes_(ArticBaseServer::MethodInterface& mi) {
+    void FSFILE_SetAttributes_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
         s32 handle;
         s32 attributes;
@@ -1002,7 +1003,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSFILE_GetAttributes_(ArticBaseServer::MethodInterface& mi) {
+    void FSFILE_GetAttributes_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
         s32 handle;
 
@@ -1019,7 +1020,7 @@ namespace ArticBaseFunctions {
             return;
         }
 
-        ArticBaseCommon::Buffer* size_buf = mi.ReserveResultBuffer(0, sizeof(u32));
+        ArticProtocolCommon::Buffer* size_buf = mi.ReserveResultBuffer(0, sizeof(u32));
         if (!size_buf) {
             return;
         }
@@ -1028,7 +1029,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSFILE_Read_(ArticBaseServer::MethodInterface& mi) {
+    void FSFILE_Read_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
         s32 handle, size;
         s64 offset;
@@ -1044,7 +1045,7 @@ namespace ArticBaseFunctions {
 
         logger.Debug("Read o=0x%08X, l=0x%08X", (u32)offset, (u32)size);
 
-        ArticBaseCommon::Buffer* read_buf = mi.ReserveResultBuffer(0, size);
+        ArticProtocolCommon::Buffer* read_buf = mi.ReserveResultBuffer(0, size);
         if (!read_buf) {
             return;
         }
@@ -1060,7 +1061,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSFILE_Write_(ArticBaseServer::MethodInterface& mi) {
+    void FSFILE_Write_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
         s32 handle, size, flags;
         s64 offset;
@@ -1088,7 +1089,7 @@ namespace ArticBaseFunctions {
             return;
         }
 
-        ArticBaseCommon::Buffer* bytes_written_buf = mi.ReserveResultBuffer(0, sizeof(u32));
+        ArticProtocolCommon::Buffer* bytes_written_buf = mi.ReserveResultBuffer(0, sizeof(u32));
         if (!bytes_written_buf) {
             return;
         }
@@ -1097,7 +1098,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSFILE_Flush_(ArticBaseServer::MethodInterface& mi) {
+    void FSFILE_Flush_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
         s32 handle;
 
@@ -1112,7 +1113,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSDIR_Read_(ArticBaseServer::MethodInterface& mi) {
+    void FSDIR_Read_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
         s32 handle;
         s32 entryCount;
@@ -1124,7 +1125,7 @@ namespace ArticBaseFunctions {
 
         if (!good) return;
 
-        ArticBaseCommon::Buffer* read_dir_buf = mi.ReserveResultBuffer(0, entryCount * sizeof(FS_DirectoryEntry));
+        ArticProtocolCommon::Buffer* read_dir_buf = mi.ReserveResultBuffer(0, entryCount * sizeof(FS_DirectoryEntry));
         if (!read_dir_buf) {
             return;
         }
@@ -1141,7 +1142,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void FSDIR_Close_(ArticBaseServer::MethodInterface& mi) {
+    void FSDIR_Close_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
         s32 handle;
 
@@ -1157,7 +1158,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void AM_GetTitleCount_(ArticBaseServer::MethodInterface& mi) {
+    void AM_GetTitleCount_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
         s8 mediatype;
 
@@ -1182,7 +1183,7 @@ namespace ArticBaseFunctions {
             return;
         }
 
-        ArticBaseCommon::Buffer* count_buf = mi.ReserveResultBuffer(0, sizeof(u32));
+        ArticProtocolCommon::Buffer* count_buf = mi.ReserveResultBuffer(0, sizeof(u32));
         if (!count_buf) {
             return;
         }
@@ -1191,7 +1192,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void AM_GetTitleList_(ArticBaseServer::MethodInterface& mi) {
+    void AM_GetTitleList_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
         s32 count;
         s8 mediatype;
@@ -1203,7 +1204,7 @@ namespace ArticBaseFunctions {
 
         if (!good) return;
 
-        ArticBaseCommon::Buffer* title_buf = mi.ReserveResultBuffer(0, count * sizeof(u64));
+        ArticProtocolCommon::Buffer* title_buf = mi.ReserveResultBuffer(0, count * sizeof(u64));
         if (!title_buf) {
             return;
         }
@@ -1229,7 +1230,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void AM_GetTitleInfo_(ArticBaseServer::MethodInterface& mi) {
+    void AM_GetTitleInfo_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
         s8 mediatype;
         s8 ignorePlatform;
@@ -1255,7 +1256,7 @@ namespace ArticBaseFunctions {
         memcpy(titleIDs, titleList, titleListSize);
         u32 count = titleListSize / sizeof(u64);
 
-        ArticBaseCommon::Buffer* title_buf = mi.ReserveResultBuffer(0, count * sizeof(AM_TitleEntry));
+        ArticProtocolCommon::Buffer* title_buf = mi.ReserveResultBuffer(0, count * sizeof(AM_TitleEntry));
         if (!title_buf) {
             free(titleIDs);
             return;
@@ -1277,7 +1278,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void AMAPP_GetDLCContentInfoCount_(ArticBaseServer::MethodInterface& mi) {
+    void AMAPP_GetDLCContentInfoCount_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
         s8 mediatype;
         s64 title_id;
@@ -1304,7 +1305,7 @@ namespace ArticBaseFunctions {
             return;
         }
 
-        ArticBaseCommon::Buffer* count_buf = mi.ReserveResultBuffer(0, sizeof(u32));
+        ArticProtocolCommon::Buffer* count_buf = mi.ReserveResultBuffer(0, sizeof(u32));
         if (!count_buf) {
             return;
         }
@@ -1313,7 +1314,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void AMAPP_FindDLCContentInfos_(ArticBaseServer::MethodInterface& mi) {
+    void AMAPP_FindDLCContentInfos_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
         s8 mediatype;
         s64 title_id;
@@ -1339,7 +1340,7 @@ namespace ArticBaseFunctions {
         memcpy(contentIDs, contentList, contentListSize);
         u32 count = contentListSize / sizeof(u16);
 
-        ArticBaseCommon::Buffer* title_buf = mi.ReserveResultBuffer(0, count * sizeof(AM_ContentInfo));
+        ArticProtocolCommon::Buffer* title_buf = mi.ReserveResultBuffer(0, count * sizeof(AM_ContentInfo));
         if (!title_buf) {
             free(contentIDs);
             return;
@@ -1357,7 +1358,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void AMAPP_ListDLCContentInfos_(ArticBaseServer::MethodInterface& mi) {
+    void AMAPP_ListDLCContentInfos_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
         s32 count;
         s8 mediatype;
@@ -1373,7 +1374,7 @@ namespace ArticBaseFunctions {
 
         if (!good) return;
 
-        ArticBaseCommon::Buffer* content_buf = mi.ReserveResultBuffer(0, count * sizeof(AM_ContentInfo));
+        ArticProtocolCommon::Buffer* content_buf = mi.ReserveResultBuffer(0, count * sizeof(AM_ContentInfo));
         if (!content_buf) {
             return;
         }
@@ -1399,7 +1400,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void AMAPP_GetDLCTitleInfos_(ArticBaseServer::MethodInterface& mi) {
+    void AMAPP_GetDLCTitleInfos_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
         s8 mediatype;
         void* titleList; size_t titleListSize;
@@ -1423,7 +1424,7 @@ namespace ArticBaseFunctions {
         memcpy(titleIDs, titleList, titleListSize);
         u32 count = titleListSize / sizeof(u64);
 
-        ArticBaseCommon::Buffer* title_buf = mi.ReserveResultBuffer(0, count * sizeof(AM_TitleEntry));
+        ArticProtocolCommon::Buffer* title_buf = mi.ReserveResultBuffer(0, count * sizeof(AM_TitleEntry));
         if (!title_buf) {
             free(titleIDs);
             return;
@@ -1441,7 +1442,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void AMAPP_ListDataTitleTicketInfos_(ArticBaseServer::MethodInterface& mi) {
+    void AMAPP_ListDataTitleTicketInfos_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
         s32 count;
         s64 title_id;
@@ -1455,7 +1456,7 @@ namespace ArticBaseFunctions {
 
         if (!good) return;
 
-        ArticBaseCommon::Buffer* content_buf = mi.ReserveResultBuffer(0, count * sizeof(AM_TicketInfo));
+        ArticProtocolCommon::Buffer* content_buf = mi.ReserveResultBuffer(0, count * sizeof(AM_TicketInfo));
         if (!content_buf) {
             return;
         }
@@ -1481,7 +1482,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void AMAPP_GetPatchTitleInfos_(ArticBaseServer::MethodInterface& mi) {
+    void AMAPP_GetPatchTitleInfos_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
         s8 mediatype;
         void* titleList; size_t titleListSize;
@@ -1505,7 +1506,7 @@ namespace ArticBaseFunctions {
         memcpy(titleIDs, titleList, titleListSize);
         u32 count = titleListSize / sizeof(u64);
 
-        ArticBaseCommon::Buffer* title_buf = mi.ReserveResultBuffer(0, count * sizeof(AM_TitleEntry));
+        ArticProtocolCommon::Buffer* title_buf = mi.ReserveResultBuffer(0, count * sizeof(AM_TitleEntry));
         if (!title_buf) {
             free(titleIDs);
             return;
@@ -1523,7 +1524,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void CFGU_GetConfigInfoBlk2_(ArticBaseServer::MethodInterface& mi) {
+    void CFGU_GetConfigInfoBlk2_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
         s32 block_id, size;
 
@@ -1541,7 +1542,7 @@ namespace ArticBaseFunctions {
             return;
         }
 
-        ArticBaseCommon::Buffer* conf_buf = mi.ReserveResultBuffer(0, size);
+        ArticProtocolCommon::Buffer* conf_buf = mi.ReserveResultBuffer(0, size);
         if (!conf_buf) {
             return;
         }
@@ -1585,7 +1586,7 @@ namespace ArticBaseFunctions {
             return;
         }
 
-        if (!ArticBaseServer::SetNonBlock(socket_fd, true)) {
+        if (!ArticProtocolServer::SetNonBlock(socket_fd, true)) {
             logger.Error("ArticController: Cannot set non-block");
             close(socket_fd);
             socket_fd = -1;
@@ -1610,7 +1611,7 @@ namespace ArticBaseFunctions {
         socket_ready = true;
 
         u8 a;
-        size_t transfered = ArticBaseServer::RecvFrom(socket_fd, &a, sizeof(a), &addr, &addr_size);
+        size_t transfered = ArticProtocolServer::RecvFrom(socket_fd, &a, sizeof(a), &addr, &addr_size);
         if (transfered > 0) {
             logger.Debug("ArticController: Started");
         } else {
@@ -1635,7 +1636,7 @@ namespace ArticBaseFunctions {
                 hidAccelRead(&packet.accel);
                 hidGyroRead(&packet.gyro);
 
-                if (ArticBaseServer::SendTo(socket_fd, &packet, sizeof(packet), &addr, &addr_size) <= 0) {
+                if (ArticProtocolServer::SendTo(socket_fd, &packet, sizeof(packet), &addr, &addr_size) <= 0) {
                     if (failedCount++ >= 1000) {
                         logger.Error("ArticController: Error writing to socket");
                         break;
@@ -1657,7 +1658,7 @@ namespace ArticBaseFunctions {
     }
 
     static bool stopController(void);
-    void Controller_Start(ArticBaseServer::MethodInterface& mi) {
+    void Controller_Start(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
 
         if (good) good = mi.FinishInputParameters();
@@ -1665,7 +1666,7 @@ namespace ArticBaseFunctions {
         if (!good) return;
 
         constexpr int port = SERVER_PORT + 10;
-        ArticBaseCommon::Buffer* conf_buf = mi.ReserveResultBuffer(0, sizeof(int));
+        ArticProtocolCommon::Buffer* conf_buf = mi.ReserveResultBuffer(0, sizeof(int));
         if (!conf_buf) {
             return;
         }
@@ -1689,7 +1690,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(0);
     }
 
-    void HIDUSER_EnableAccelerometer_(ArticBaseServer::MethodInterface& mi) {
+    void HIDUSER_EnableAccelerometer_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
 
         if (good) mi.FinishInputParameters();
@@ -1699,7 +1700,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void HIDUSER_DisableAccelerometer_(ArticBaseServer::MethodInterface& mi) {
+    void HIDUSER_DisableAccelerometer_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
 
         if (good) mi.FinishInputParameters();
@@ -1709,7 +1710,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void HIDUSER_EnableGyroscope_(ArticBaseServer::MethodInterface& mi) {
+    void HIDUSER_EnableGyroscope_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
 
         if (good) mi.FinishInputParameters();
@@ -1719,7 +1720,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void HIDUSER_DisableGyroscope_(ArticBaseServer::MethodInterface& mi) {
+    void HIDUSER_DisableGyroscope_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
 
         if (good) mi.FinishInputParameters();
@@ -1729,7 +1730,7 @@ namespace ArticBaseFunctions {
         mi.FinishGood(res);
     }
 
-    void HIDUSER_GetGyroscopeRawToDpsCoefficient_(ArticBaseServer::MethodInterface& mi) {
+    void HIDUSER_GetGyroscopeRawToDpsCoefficient_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
 
         if (good) mi.FinishInputParameters();
@@ -1741,7 +1742,7 @@ namespace ArticBaseFunctions {
             return;
         }
 
-        ArticBaseCommon::Buffer* coef_buf = mi.ReserveResultBuffer(0, sizeof(float));
+        ArticProtocolCommon::Buffer* coef_buf = mi.ReserveResultBuffer(0, sizeof(float));
         if (!coef_buf) {
             return;
         }
@@ -1751,7 +1752,7 @@ namespace ArticBaseFunctions {
     }
 
     
-    void HIDUSER_GetGyroscopeCalibrateParam_(ArticBaseServer::MethodInterface& mi) {
+    void HIDUSER_GetGyroscopeCalibrateParam_(ArticProtocolServer::MethodInterface& mi) {
         bool good = true;
 
         if (good) mi.FinishInputParameters();
@@ -1763,7 +1764,7 @@ namespace ArticBaseFunctions {
             return;
         }
 
-        ArticBaseCommon::Buffer* coef_buf = mi.ReserveResultBuffer(0, sizeof(param));
+        ArticProtocolCommon::Buffer* coef_buf = mi.ReserveResultBuffer(0, sizeof(param));
         if (!coef_buf) {
             return;
         }
@@ -1774,11 +1775,11 @@ namespace ArticBaseFunctions {
 
     template<std::size_t N>
     constexpr auto& METHOD_NAME(char const (&s)[N]) {
-        static_assert(N < sizeof(ArticBaseCommon::RequestPacket::method), "String exceeds 32 bytes!");
+        static_assert(N < sizeof(ArticProtocolCommon::RequestPacket::method), "String exceeds 32 bytes!");
         return s;
     }
 
-    std::map<std::string, void(*)(ArticBaseServer::MethodInterface& mi)> functionHandlers = {
+    std::map<std::string, void(*)(ArticProtocolServer::MethodInterface& mi)> functionHandlers = {
         {METHOD_NAME("Process_GetTitleID"), Process_GetTitleID},
         {METHOD_NAME("Process_GetProductInfo"), Process_GetProductInfo},
         {METHOD_NAME("Process_GetExheader"), Process_GetExheader},

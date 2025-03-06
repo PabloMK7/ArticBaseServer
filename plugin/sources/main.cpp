@@ -13,8 +13,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#include "ArticBaseServer.hpp"
-#include "ArticBaseFunctions.hpp"
+#include "ArticProtocolServer.hpp"
+#include "ArticFunctions.hpp"
 #include "CTRPluginFramework/Clock.hpp"
 #include "plgldr.h"
 
@@ -29,7 +29,7 @@ Logger logger;
 static bool should_run = true;
 static int listen_fd = -1;
 static int accept_fd = -1;
-static ArticBaseServer* articBase = nullptr;
+static ArticProtocolServer* articBase = nullptr;
 static bool wasControllerMode = false;
 static bool everControllerMode = false;
 static bool reloadBottomText = false;
@@ -88,7 +88,7 @@ void Start(void* arg) {
             continue;
         }
 
-        if (!ArticBaseServer::SetNonBlock(listen_fd, true)) {
+        if (!ArticProtocolServer::SetNonBlock(listen_fd, true)) {
             logger.Error("Server:: Failed to set non-block");
             close(listen_fd);
             listen_fd = -1;
@@ -147,7 +147,7 @@ void Start(void* arg) {
 
         logger.Info("Server: Connected: %s:%d", inet_ntoa(peeraddr.sin_addr), ntohs(peeraddr.sin_port));
 
-        if (!ArticBaseServer::SetNonBlock(accept_fd, true)) {
+        if (!ArticProtocolServer::SetNonBlock(accept_fd, true)) {
             logger.Error("Server: Failed to set non-block");
             shutdown(accept_fd, SHUT_RDWR);
             close(accept_fd);
@@ -155,14 +155,14 @@ void Start(void* arg) {
             continue;
         }
         
-        articBase = new ArticBaseServer(accept_fd);
+        articBase = new ArticProtocolServer(accept_fd);
         articBase->Serve();
         accept_fd = -1;
         delete articBase;
         articBase = nullptr;
         logger.Info("Server: Disconnected");
 
-        for (auto it = ArticBaseFunctions::destructFunctions.begin(); it != ArticBaseFunctions::destructFunctions.end(); it++) {
+        for (auto it = ArticFunctions::destructFunctions.begin(); it != ArticFunctions::destructFunctions.end(); it++) {
             (*it)();
         }
         isControllerMode = false;
@@ -239,7 +239,7 @@ void Main() {
     logger.Raw(true, "");
 
     bool setupCorrect = true;
-    for (auto it = ArticBaseFunctions::setupFunctions.begin(); it != ArticBaseFunctions::setupFunctions.end(); it++) {
+    for (auto it = ArticFunctions::setupFunctions.begin(); it != ArticFunctions::setupFunctions.end(); it++) {
         setupCorrect = (*it)() && setupCorrect;
     }
 

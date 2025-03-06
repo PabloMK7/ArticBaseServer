@@ -1,6 +1,6 @@
 #include "3ds.h"
 
-namespace ArticBaseFunctions {
+namespace ArticFunctions {
 
     static Handle loaderHandleCustom;
     static int loaderRefCountCustom;
